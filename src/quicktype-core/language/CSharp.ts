@@ -10,6 +10,7 @@ import {
     TransformedStringTypeKind,
     PrimitiveStringTypeKind,
     PrimitiveType,
+    ObjectType,
 } from "../Type";
 import { matchType, nullableFromUnion, removeNullFromUnion, directlyReachableSingleNamedType } from "../TypeUtils";
 import { Sourcelike, maybeAnnotated, modifySource } from "../Source";
@@ -53,7 +54,7 @@ import { minMaxLengthForType, minMaxValueForType } from "../attributes/Constrain
 
 const unicode = require("@mark.probst/unicode-properties");
 
-export type Version = 5 | 6;
+export type Version = 5 | 6 | 8;
 export type OutputFeatures = { helpers: boolean; attributes: boolean };
 
 export enum AccessModifier {
@@ -129,12 +130,14 @@ export const cSharpOptions = {
     ),
     // FIXME: Do this via a configurable named eventually.
     namespace: new StringOption("namespace", "Generated namespace", "NAME", "QuickType"),
+    generatePartial: new BooleanOption("gen-partial", "Generate partial classes", true),
     version: new EnumOption<Version>(
         "csharp-version",
         "C# version",
         [
             ["5", 5],
             ["6", 6],
+            ["8", 8],
         ],
         "6",
         "secondary"
@@ -170,6 +173,7 @@ export class CSharpTargetLanguage extends TargetLanguage {
             cSharpOptions.useList,
             cSharpOptions.useDecimal,
             cSharpOptions.typeForAny,
+            cSharpOptions.generatePartial,
         ];
     }
 
@@ -402,7 +406,14 @@ export class CSharpRenderer extends ConvenienceRenderer {
 
     protected propertyDefinition(property: ClassProperty, name: Name, _c: ClassType, _jsonName: string): Sourcelike {
         const t = property.type;
-        const csType = property.isOptional
+        const isNullable = this._csOptions.version >= 8 &&
+            (property.isOptional
+                || t instanceof ArrayType
+                || t instanceof ObjectType
+                || (t.isPrimitive() && t.kind === "string")
+            );
+
+        const csType = isNullable
             ? this.nullableCSType(t, followTargetType, true)
             : this.csType(t, followTargetType, true);
         return ["public ", csType, " ", name, " { get; set; }"];
@@ -425,7 +436,7 @@ export class CSharpRenderer extends ConvenienceRenderer {
         this.emitType(
             this.descriptionForType(c),
             AccessModifier.Public,
-            "partial class",
+            this._csOptions.generatePartial ? "partial class" : "class",
             className,
             this.baseclassForType(c),
             () => {
@@ -638,6 +649,7 @@ export class NewtonsoftCSharpTargetLanguage extends CSharpTargetLanguage {
             newtonsoftCSharpOptions.checkRequired,
             newtonsoftCSharpOptions.typeForAny,
             newtonsoftCSharpOptions.baseclass,
+            newtonsoftCSharpOptions.generatePartial
         ];
     }
 
