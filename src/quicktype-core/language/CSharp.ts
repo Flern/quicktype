@@ -355,11 +355,12 @@ export class CSharpRenderer extends ConvenienceRenderer {
     protected nullableCSType(
         t: Type,
         follow: (t: Type) => Type = followTargetType,
-        withIssues: boolean = false
+        withIssues: boolean = false,
+        force: boolean = false
     ): Sourcelike {
         t = followTargetType(t);
         const csType = this.csType(t, follow, withIssues);
-        if (isValueType(t)) {
+        if (isValueType(t) || force) {
             return [csType, "?"];
         } else {
             return csType;
@@ -406,7 +407,8 @@ export class CSharpRenderer extends ConvenienceRenderer {
 
     protected propertyDefinition(property: ClassProperty, name: Name, _c: ClassType, _jsonName: string): Sourcelike {
         const t = property.type;
-        const isNullable = this._csOptions.version >= 8 &&
+        const nullableValuesByRefSupport = this._csOptions.version >= 8;
+        let isNullable = nullableValuesByRefSupport &&
             (property.isOptional
                 || t instanceof ArrayType
                 || t instanceof ObjectType
@@ -414,7 +416,7 @@ export class CSharpRenderer extends ConvenienceRenderer {
             );
 
         const csType = isNullable
-            ? this.nullableCSType(t, followTargetType, true)
+            ? this.nullableCSType(t, followTargetType, true, nullableValuesByRefSupport)
             : this.csType(t, followTargetType, true);
         return ["public ", csType, " ", name, " { get; set; }"];
     }
